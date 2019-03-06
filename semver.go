@@ -6,22 +6,38 @@ import (
 	"log"
 	"strings"
 	"strconv"
+	"regexp"
 	"io/ioutil"
 	"github.com/urfave/cli"
 	"github.com/hashicorp/go-version"
+	"github.com/go-yaml/yaml"
 )
+
+type Config struct {
+    Version string
+    Files map[string]string
+}
 
 type SemverUpdater struct {
 	version *version.Version
+	config Config
 }
 
-func (s *SemverUpdater) ReadCurrentVersion() {
-	version, err := ioutil.ReadFile(".semver")
+func (s *SemverUpdater) ReadConfig(configPath string) {
+	content, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	s.UpdateVersion(string(version))
+	var config Config
+	err = yaml.Unmarshal(content, &config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	s.UpdateVersion(config.Version)
+	s.config = config
+	s.config.Files["semver.yml"] = "version:\\s*.*"
 }
 
 func (s *SemverUpdater) UpdateVersion(versionStr string) {
@@ -54,10 +70,34 @@ func (s *SemverUpdater) Update(major bool, minor bool, patch bool) {
 	s.UpdateSegments([]bool{major, minor, patch})
 }
 
+func (s *SemverUpdater) ReplaceVersions(content string, regex string) string {
+	re := regexp.MustCompile(regex)
+	idx := re.FindStringIndex(content)
+	from := idx[0]
+	to := idx[1]
+	substr := content[from:to]
+
+	newSubstr := strings.Replace(substr, s.config.Version, s.version.String(), -1)
+	content = strings.Replace(content, substr, newSubstr, -1)
+	return content
+}
+
+func (s *SemverUpdater) SyncFiles() {
+	for file, regex := range s.config.Files {
+		content, err := ioutil.ReadFile(file)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		newContent := s.ReplaceVersions(string(content), regex)
+		ioutil.WriteFile(file, []byte(newContent), 0644)
+	}
+}
+
 func main() {
-	semver	:= SemverUpdater{}
-	app		:= cli.NewApp()
-	app.Version = "0.0.0"
+	var semver SemverUpdater
+	app := cli.NewApp()
+	app.Version = "0.1.0"
 
 	app.Flags = []cli.Flag {
 		cli.BoolFlag{Name: "compgen", Hidden: true},
@@ -73,10 +113,15 @@ func main() {
 			Name: "patch, p",
 			Usage: "...",
 		},
+		cli.StringFlag {
+			Name: "config, c",
+			Value: "./semver.yml",
+			Usage: "...",
+		},
 	}
 
 	app.Action = func(c *cli.Context) error {
-		semver.ReadCurrentVersion()
+		semver.ReadConfig(c.String("config"))
 
 		if c.NArg() > 0 {
 			newVersion := c.Args().Get(0)
@@ -86,6 +131,7 @@ func main() {
 		}
 
 		fmt.Println(semver.version)
+		semver.SyncFiles()
 		return nil
 	}
 
