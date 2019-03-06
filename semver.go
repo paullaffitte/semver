@@ -4,48 +4,58 @@ import (
 	"fmt"
 	"os"
 	"log"
+	"strings"
+	"strconv"
 	"io/ioutil"
 	"github.com/urfave/cli"
+	"github.com/hashicorp/go-version"
 )
 
-type Semver struct {
-	major uint16
-	minor uint16
-	patch uint16
+type SemverUpdater struct {
+	version *version.Version
 }
 
-func (s Semver) readCurrentVersion() {
+func (s *SemverUpdater) ReadCurrentVersion() {
 	version, err := ioutil.ReadFile(".semver")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("File contents: %s", version)
+
+	s.UpdateVersion(string(version))
 }
 
-func (s Semver) updateVersion(version string) {
-	fmt.Println("New version: %s", version)
+func (s *SemverUpdater) UpdateVersion(versionStr string) {
+	version, err := version.NewSemver(versionStr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s.version = version
 }
 
-func (s Semver) update(major bool, minor bool, patch bool) {
-	if major {
-		fmt.Println("Major")
-		s.major += 1
-		s.minor = 0
-		s.patch = 0
+func (s *SemverUpdater) UpdateSegments(incrs []bool) {
+	reset := false
+	segments := s.version.Segments()
+	segmentsStr := []string{}
+	for i := 0; i < len(segments); i++ {
+		if reset {
+			segments[i] = 0
+		}
+		if i < len(incrs) && incrs[i] {
+			segments[i]++
+			reset = true
+		}
+		segmentsStr = append(segmentsStr, strconv.Itoa(segments[i]))
 	}
-	if minor {
-		fmt.Println("minor")
-		s.minor += 1
-		s.patch = 0
-	}
-	if patch {
-		fmt.Println("patch")
-		s.patch += 1
-	}
+	s.UpdateVersion(strings.Join(segmentsStr, "."))
+}
+
+
+func (s *SemverUpdater) Update(major bool, minor bool, patch bool) {
+	s.UpdateSegments([]bool{major, minor, patch})
 }
 
 func main() {
-	semver	:= Semver{}
+	semver	:= SemverUpdater{}
 	app		:= cli.NewApp()
 	app.Version = "0.0.0"
 
@@ -66,12 +76,16 @@ func main() {
 	}
 
 	app.Action = func(c *cli.Context) error {
-		semver.readCurrentVersion()
+		semver.ReadCurrentVersion()
+
 		if c.NArg() > 0 {
 			newVersion := c.Args().Get(0)
-			semver.updateVersion(newVersion)
+			semver.UpdateVersion(newVersion)
+		} else {
+			semver.Update(c.Bool("Major"), c.Bool("minor"), c.Bool("patch"))
 		}
-		semver.update(c.Bool("Major"), c.Bool("minor"), c.Bool("patch"))
+
+		fmt.Println(semver.version)
 		return nil
 	}
 
