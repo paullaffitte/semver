@@ -48,10 +48,11 @@ func (s *SemverUpdater) UpdateVersion(versionStr string) {
 	s.version = version
 }
 
-func (s *SemverUpdater) UpdateSegments(incrs []bool) {
+func (s *SemverUpdater) UpdatedSegments(incrs []bool) string {
 	reset := false
 	segments := s.version.Segments()
 	segmentsStr := []string{}
+
 	for i := 0; i < len(segments); i++ {
 		if reset {
 			segments[i] = 0
@@ -62,12 +63,29 @@ func (s *SemverUpdater) UpdateSegments(incrs []bool) {
 		}
 		segmentsStr = append(segmentsStr, strconv.Itoa(segments[i]))
 	}
-	s.UpdateVersion(strings.Join(segmentsStr, "."))
+
+	return strings.Join(segmentsStr, ".")
 }
 
 
-func (s *SemverUpdater) Update(major bool, minor bool, patch bool) {
-	s.UpdateSegments([]bool{major, minor, patch})
+func (s *SemverUpdater) Update(major bool, minor bool, patch bool, tag string, metadata string) {
+	updated := major || minor || patch
+
+	if len(tag) == 0 && !updated {
+		tag = s.version.Prerelease()
+	}
+	if len(tag) > 0 {
+		tag = "-" + tag
+	}
+
+	if len(metadata) == 0 && !updated {
+		metadata = s.version.Metadata()
+	}
+	if len(metadata) > 0 {
+		metadata = "+" + metadata
+	}
+
+	s.UpdateVersion(s.UpdatedSegments([]bool{major, minor, patch}) + tag + metadata)
 }
 
 func (s *SemverUpdater) ReplaceVersions(content string, regex string) string {
@@ -97,7 +115,7 @@ func (s *SemverUpdater) SyncFiles() {
 func main() {
 	var semver SemverUpdater
 	app := cli.NewApp()
-	app.Version = "0.1.0"
+	app.Version = "0.2.0"
 
 	app.Flags = []cli.Flag {
 		cli.BoolFlag{Name: "compgen", Hidden: true},
@@ -114,6 +132,14 @@ func main() {
 			Usage: "...",
 		},
 		cli.StringFlag {
+			Name: "tag, t",
+			Usage: "...",
+		},
+		cli.StringFlag {
+			Name: "metadata, d",
+			Usage: "...",
+		},
+		cli.StringFlag {
 			Name: "config, c",
 			Value: "./semver.yml",
 			Usage: "...",
@@ -127,7 +153,7 @@ func main() {
 			newVersion := c.Args().Get(0)
 			semver.UpdateVersion(newVersion)
 		} else {
-			semver.Update(c.Bool("Major"), c.Bool("minor"), c.Bool("patch"))
+			semver.Update(c.Bool("Major"), c.Bool("minor"), c.Bool("patch"), c.String("tag"), c.String("metadata"))
 		}
 
 		fmt.Println(semver.version)
