@@ -23,6 +23,21 @@ type SemverUpdater struct {
 	config Config
 }
 
+func (s *SemverUpdater) Init(configPath string) {
+	if _, err := os.Stat(configPath); err == nil {
+		log.Fatal("file " + configPath + " already exists, please remove it before retrying")
+	}
+	config := Config { Version: "0.0.0" }
+
+	header := "# semver config file -- https://github.com/paullaffitte/semver\n\n"
+	configStr, err := yaml.Marshal(&config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ioutil.WriteFile(configPath, []byte(header + string(configStr)), 0644)
+}
+
 func (s *SemverUpdater) ReadConfig(configPath string) {
 	content, err := ioutil.ReadFile(configPath)
 	if err != nil {
@@ -66,7 +81,6 @@ func (s *SemverUpdater) UpdatedSegments(incrs []bool) string {
 
 	return strings.Join(segmentsStr, ".")
 }
-
 
 func (s *SemverUpdater) Update(major bool, minor bool, patch bool, tag string, metadata string) {
 	updated := major || minor || patch
@@ -115,7 +129,7 @@ func (s *SemverUpdater) SyncFiles() {
 func main() {
 	var semver SemverUpdater
 	app := cli.NewApp()
-	app.Version = "0.2.0"
+	app.Version = "0.3.0"
 
 	app.Flags = []cli.Flag {
 		cli.BoolFlag{Name: "compgen", Hidden: true},
@@ -144,9 +158,17 @@ func main() {
 			Value: "./semver.yml",
 			Usage: "...",
 		},
+		cli.BoolFlag {
+			Name: "init, i",
+			Usage: "...",
+		},
 	}
 
 	app.Action = func(c *cli.Context) error {
+		if c.Bool("init") {
+			semver.Init(c.String("config"))
+		}
+
 		semver.ReadConfig(c.String("config"))
 
 		if c.NArg() > 0 {
