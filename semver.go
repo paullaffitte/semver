@@ -132,35 +132,34 @@ func main() {
 	app.Version = "0.3.0"
 
 	app.Flags = []cli.Flag {
-		cli.BoolFlag{Name: "compgen", Hidden: true},
 		cli.BoolFlag {
-			Name: "Major, M",
-			Usage: "...",
+			Name: "major, M",
+			Usage: "Bump the major version",
 		},
 		cli.BoolFlag {
 			Name: "minor, m",
-			Usage: "...",
+			Usage: "Bump the minor version",
 		},
 		cli.BoolFlag {
 			Name: "patch, p",
-			Usage: "...",
+			Usage: "Bump the patch version",
 		},
 		cli.StringFlag {
 			Name: "tag, t",
-			Usage: "...",
+			Usage: "Set version tag",
 		},
 		cli.StringFlag {
 			Name: "metadata, d",
-			Usage: "...",
+			Usage: "Set version metadata",
 		},
 		cli.StringFlag {
 			Name: "config, c",
 			Value: "./semver.yml",
-			Usage: "...",
+			Usage: "If specified, use the given file as config file",
 		},
 		cli.BoolFlag {
 			Name: "init, i",
-			Usage: "...",
+			Usage: "Create a basic semver.yml file in the current directory",
 		},
 	}
 
